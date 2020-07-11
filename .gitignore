@@ -6,3 +6,4 @@
 *.txt
 *.hea
 *alexander.ecg
+**/*.egg-info
