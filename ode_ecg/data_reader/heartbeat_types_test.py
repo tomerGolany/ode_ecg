@@ -1,5 +1,5 @@
 import unittest
-from ecg_pytorch.data_reader import heartbeat_types
+from ode_ecg.data_reader import heartbeat_types
 
 
 class HeartBeatTypesTest(unittest.TestCase):

@@ -1,5 +1,5 @@
 import unittest
-from ecg_pytorch.data_reader import dataset_configs
+from ode_ecg.data_reader import dataset_configs
 
 
 class TestDatasetConfigs(unittest.TestCase):

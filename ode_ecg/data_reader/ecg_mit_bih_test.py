@@ -1,5 +1,5 @@
 import unittest
-from ecg_pytorch.data_reader import ecg_mit_bih
+from ode_ecg.data_reader import ecg_mit_bih
 import logging
 
 

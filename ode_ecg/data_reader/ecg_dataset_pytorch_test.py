@@ -1,6 +1,6 @@
 import logging
 import unittest
-from ecg_pytorch.data_reader import ecg_dataset_pytorch, dataset_configs, heartbeat_types
+from ode_ecg.data_reader import ecg_dataset_pytorch, dataset_configs, heartbeat_types
 
 
 class TestEcgHearBeatsDatasetPytorch(unittest.TestCase):
