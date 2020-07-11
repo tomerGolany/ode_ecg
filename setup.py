@@ -13,5 +13,5 @@ setup(name='ecg_ode',
       author_email='tomer.golany@gmail.com',
       license='Technion',
       packages=find_packages(),
-      include_package_data=False,
+      include_package_data=True,
       zip_safe=False)
