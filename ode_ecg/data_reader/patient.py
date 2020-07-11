@@ -1,14 +1,11 @@
 import numpy as np
-import os
 import logging
-# from matplotlib import pyplot as plt
-# from bokeh.io import output_file, show
-# from bokeh.layouts import row
-# from bokeh.plotting import figure
 from ode_ecg import train_configs
 from ode_ecg.data_reader import heartbeat_types
 import wfdb
 import pandas as pd
+from ode_ecg.data_reader import morphological_parameters
+import matplotlib.pyplot as plt
 
 DATA_DIR = train_configs.base + 'ecg_pytorch/ecg_pytorch/data_reader/text_files/'
 
@@ -24,8 +21,13 @@ class Patient(object):
     """Patient object represents a patient from the MIT-BIH AR database.
 
     Attributes:
-
-
+        patient_number: Unique patient number.
+        signals: Raw ecg signals from two leads.
+        additional_fields:
+        mit_bih_labels_str:
+        r_peaks_locations: Locations of R-peaks of each heartbeat.
+        labels_descriptions:
+        heartbeats: Sliced heartbeats.
     """
 
     def __init__(self, patient_number):
@@ -36,42 +38,31 @@ class Patient(object):
         logging.info("Creating patient {}...".format(patient_number))
         self.patient_number = patient_number
         self.signals, self.additional_fields = self.get_raw_signals()
-        self.mit_bih_labels_str, self.labels_locations, self.labels_descriptions = self.get_annotations()
+        self.mit_bih_labels_str, self.r_peaks_annotations, self.labels_descriptions = self.get_annotations()
+
+        self.each_lead_two, self.ecg_other_lead = self.separate_leads()
+        self.r_peaks_locations = morphological_parameters.find_r_peaks(self.each_lead_two)
+        self.p_peaks, self.q_peaks, self.s_peaks, self.t_peaks = morphological_parameters.find_p_q_r_s_t_peaks(
+            self.each_lead_two, self.r_peaks_locations)
+
         self.heartbeats = self.slice_heartbeats()
         logging.info("Completed patient {}.\n\n".format(patient_number))
 
-    @DeprecationWarning
-    def read_raw_data(self):
-        """Read patient's data file.
-
-        :return:
-        """
-        dat_file = os.path.join(DATA_DIR, self.patient_number + '.txt')
-        if not os.path.exists(dat_file):
-            raise AssertionError("{} doesn't exist.".format(dat_file))
-        time = []
-        voltage1 = []
-        voltage2 = []
-        with open(dat_file, 'r') as fd:
-            for line in fd:
-                line = line.split()
-                time.append(line[0])
-                voltage1.append(float(line[1]))
-                voltage2.append(float(line[2]))
-
-        tags_file = os.path.join(DATA_DIR, self.patient_number + '_tag.txt')
-        if not os.path.exists(dat_file):
-            raise AssertionError("{} doesn't exist.".format(tags_file))
-        tags_time = []
-        tags = []
-        r_peaks_indexes = []
-        with open(tags_file, 'r') as fd:
-            for line in fd:
-                line = line.split()
-                tags_time.append(line[0])
-                tags.append(line[2])
-                r_peaks_indexes.append(int(line[1]))
-        return time, voltage1, voltage2, tags_time, tags, r_peaks_indexes
+    def separate_leads(self):
+        """Separate the signal to two leads."""
+        lead_ii_pos = None
+        other_lead_pos = None
+        for i, lead in enumerate(self.additional_fields['sig_name']):
+            if lead == 'MLII':
+                lead_ii_pos = i
+            else:
+                other_lead_pos = i
+        if lead_ii_pos is None:
+            raise AssertionError("Didn't find lead 2 position. LEADS: {}".format(self.additional_fields['sig_name']))
+        logging.info("LEAD 2 position: {}".format(lead_ii_pos))
+        ecg_lead_two = self.signals[:, lead_ii_pos]
+        ecg_signal_other_lead = self.signals[:, other_lead_pos]
+        return ecg_lead_two, ecg_signal_other_lead
 
     def get_raw_signals(self):
         """Get raw signal using the wfdb package.
@@ -91,14 +82,9 @@ class Patient(object):
         return signals, fields
 
     def get_annotations(self):
-        """Get signal annotation using the wfdb package.
-
-        :return:
-        """
-        ann = wfdb.rdann(self.patient_number, 'atr', pb_dir='mitdb', return_label_elements=['symbol', 'label_store',
-                                                                                            'description'],
-                         summarize_labels=True)
-
+        """Get signal annotation using the wfdb package."""
+        ann = wfdb.rdann(self.patient_number, 'atr', pb_dir='mitdb',
+                         return_label_elements=['symbol', 'label_store', 'description'], summarize_labels=True)
         mit_bih_labels_str = ann.symbol
 
         labels_locations = ann.sample
@@ -135,7 +121,7 @@ class Patient(object):
         logging.info("LEAD 2 position: {}".format(lead_ii_pos))
         ecg_signal = self.signals[:, lead_ii_pos]
         ecg_signal_other_lead = self.signals[:, other_lead_pos]
-        r_peak_locations = self.labels_locations
+        r_peak_locations = self.r_peaks_locations[1:]
 
         # convert seconds to samples
         before = int(before * sampling_rate)  # Number of samples per 200 ms.
@@ -144,7 +130,8 @@ class Patient(object):
         len_of_signal = len(ecg_signal)
 
         heart_beats = []
-
+        logging.info("Number of r-peaks: %d", len(r_peak_locations))
+        num_skip_heartbeats = 0
         for ind, r_peak in enumerate(r_peak_locations):
             start = r_peak - before
             if start < 0:
@@ -154,6 +141,9 @@ class Patient(object):
             if end > len_of_signal - 1:
                 logging.info("Skipping beat {}".format(ind))
                 break
+            if ind >= len(self.q_peaks):
+                break
+
             heart_beats_dict = {}
             heart_beat = np.array(ecg_signal[start:end])
             heart_beat_other_lead = np.array(ecg_signal_other_lead[start:end])
@@ -169,7 +159,20 @@ class Patient(object):
             heart_beats_dict['beat_ind'] = ind
             heart_beats_dict['lead'] = 'MLII'
             heart_beats_dict['other_lead_name'] = other_lead_name
+            heart_beats_dict['r'] = r_peak - start
+            heart_beats_dict['q'] = self.q_peaks[ind] - start
+            heart_beats_dict['p'] = self.p_peaks[ind] - start
+            heart_beats_dict['s'] = self.s_peaks[ind] - start
+            heart_beats_dict['t'] = self.t_peaks[ind] - start
+
+            # Validate values of PQRST:
+            if heart_beats_dict['p'] < 0 or heart_beats_dict['t'] >= len(heart_beat):
+                logging.info("Skipping heartbeat...")
+                num_skip_heartbeats += 1
+                continue
+
             heart_beats.append(heart_beats_dict)
+        logging.info("Skipped %d heartbeats...", num_skip_heartbeats)
         return heart_beats
 
     def get_heartbeats_of_type(self, aami_label_str):
@@ -220,21 +223,17 @@ class Patient(object):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    p_100 = Patient('114')
+    p_100 = Patient('101')
     df = p_100.get_patient_df()
     print(df)
     print(p_100.heartbeats_summaries())
-    # heartbeats = p_100.heartbeats
-    #
-    # logging.info("Total number of heartbeats: {}\t #N: {}\t #S: {}\t, #V: {}, #F: {}\t #Q: {}"
-    #              .format(len(heartbeats), p_100.num_heartbeats('N'), p_100.num_heartbeats('S'), p_100.num_heartbeats('V'),
-    #                      p_100.num_heartbeats('F'), p_100.num_heartbeats('Q')))
+    print("Number of heartbeats: %d" % len(p_100.heartbeats))
+    hb = p_100.heartbeats[100]
 
-    # time = list(range(216))
-    # for i in range(100):
-    #     p = figure(x_axis_label='Sample number (360 Hz)', y_axis_label='Voltage[mV]')
-    #     p.line(time, N_b[i], line_width=2, line_color="green")
-    #     output_file("N_{}_real.html".format(i))
-    #     show(p)
-    # plt.plot(N_b[i])
-    # plt.show()
+    plt.plot(hb['cardiac_cycle'])
+    plt.plot(hb['p'], hb['cardiac_cycle'][hb['p']], 'o', color='red')
+    plt.plot(hb['q'], hb['cardiac_cycle'][hb['q']], 'o', color='yellow')
+    plt.plot(hb['r'], hb['cardiac_cycle'][hb['r']], 'o', color='black')
+    plt.plot(hb['s'], hb['cardiac_cycle'][hb['s']], 'o', color='orange')
+    plt.plot(hb['t'], hb['cardiac_cycle'][hb['t']], 'o', color='green')
+    plt.show()

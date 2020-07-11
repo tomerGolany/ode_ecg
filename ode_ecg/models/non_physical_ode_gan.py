@@ -1,4 +1,5 @@
 """Implementation of the non-physical ode gan."""
+# from torchdiffeq import odeint_adjoint as odeint
 from torchdiffeq import odeint
 import torch
 import torch.nn as nn
@@ -92,7 +93,7 @@ def train_ecg_gan(batch_size, num_train_steps, model_dir, beat_type):
             d_real_pred_hist.append(mean_d_real_output)
 
             # Create fake input from generator:
-            timestamsp = torch.from_numpy(np.linspace(1, 216, num=216)).float()
+            timestamsp = torch.from_numpy(np.linspace(1, 216, num=216)).float().to(device)
             output_g_fake = odeint(netG, v0, timestamsp, method='rk4')
             output_g_fake = output_g_fake.permute(1, 0, 2).view(-1, 216)
             output = netD(output_g_fake.detach())
@@ -104,9 +105,9 @@ def train_ecg_gan(batch_size, num_train_steps, model_dir, beat_type):
             total_loss_d = ce_loss_d_fake + ce_loss_d_real
 
             # Update discriminator every 5 iterations:
-            if i % 5 == 0:
-                ce_loss_d_fake.backward()
-                optimizer_d.step()
+            # if i % 5 == 0:
+            ce_loss_d_fake.backward()
+            optimizer_d.step()
 
             #
             # Generator optimization:
@@ -165,4 +166,4 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     logging.info(device)
-    train_ecg_gan(batch_size=40, num_train_steps=100000, model_dir='logs_rk4_v2', beat_type='N')
+    train_ecg_gan(batch_size=40, num_train_steps=100000, model_dir='logs_rk4_update_dic_equal_x', beat_type='N')

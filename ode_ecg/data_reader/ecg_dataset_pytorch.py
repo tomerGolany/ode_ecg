@@ -34,10 +34,10 @@ class EcgHearBeatsDatasetPytorch(Dataset):
             raise ValueError("configs input is not of type DatasetConfigs. instead: {}".format(type(configs)))
 
         self.configs = configs
-        if os.path.exists(pickle_data.full_path + '/ecg_mit_bih.pickle'):
-            mit_bih_dataset = pickle_data.load_ecg_mit_bih_from_pickle()
-        else:
-            mit_bih_dataset = ecg_mit_bih.ECGMitBihDataset()
+        # if os.path.exists(pickle_data.full_path + '/ecg_mit_bih.pickle'):
+        #     mit_bih_dataset = pickle_data.load_ecg_mit_bih_from_pickle()
+        # else:
+        mit_bih_dataset = ecg_mit_bih.ECGMitBihDataset()
 
         self.partition = configs.partition
         if configs.partition == dataset_configs.PartitionNames.train.name:
@@ -115,6 +115,8 @@ class EcgHearBeatsDatasetPytorch(Dataset):
         if not self.configs.one_vs_all:
             sample = {'cardiac_cycle': heartbeat_main_lead, 'beat_type': heartbeat_label_str,
                       'label': np.array(sample['aami_label_one_hot']),
+                      'p': sample['p'], 'q': sample['q'], 'r': sample['r'], 's': sample['s'],
+                      't': sample['t'],
                       # 'cardiac_cycle_other_lead': heartbeat_second_lead,
                       #'other_lead_name': second_lead_name
             }
@@ -122,12 +124,16 @@ class EcgHearBeatsDatasetPytorch(Dataset):
             if heartbeat_label_str == self.configs.classified_heartbeat:
                 sample = {'cardiac_cycle': heartbeat_main_lead, 'beat_type': heartbeat_label_str,
                           'label': np.array([1, 0]),
+                          'p': sample['p'], 'q': sample['q'], 'r': sample['r'], 's': sample['s'],
+                          't': sample['t'],
                           # 'cardiac_cycle_other_lead': heartbeat_second_lead,
                           # 'other_lead_name': second_lead_name
                           }
             else:
                 sample = {'cardiac_cycle': heartbeat_main_lead, 'beat_type': heartbeat_label_str,
                           'label': np.array([0, 1]),
+                          'p': sample['p'], 'q': sample['q'], 'r': sample['r'], 's': sample['s'],
+                          't': sample['t'],
                           # 'cardiac_cycle_other_lead': heartbeat_second_lead,
                           # 'other_lead_name': second_lead_name
                           }
@@ -197,79 +203,20 @@ def scale_signal(signal, min_val=-0.01563, max_val=0.042557):
     return scaled
 
 
-# class EcgHearBeatsDatasetTest(Dataset):
-#     """ECG heart beats dataset."""
-#
-#     def __init__(self, transform=None, beat_type=None, one_vs_all=None, lstm_setting=True):
-#         #  _, _, self.test = pickle_data.load_ecg_input_from_pickle()
-#         mit_bih_dataset = ecg_mit_bih.ECGMitBihDataset()
-#         self.train = mit_bih_dataset.train_heartbeats
-#         self.test = mit_bih_dataset.test_heartbeats
-#
-#         self.test = self.test + self.train
-#         self.lstm_setting = lstm_setting
-#         self.one_vs_all = False
-#         if beat_type is not None and one_vs_all is None:
-#             self.test = np.array([sample for sample in self.test if sample['aami_label_str'] == beat_type])
-#
-#         if one_vs_all is not None:
-#             self.beat_type = beat_type
-#             self.one_vs_all = True
-#             self.num_of_classes = 2
-#         else:
-#             self.num_of_classes = 5
-#         self.transform = transform
-#
-#     def __len__(self):
-#         return len(self.test)
-#
-#     def __getitem__(self, idx):
-#         sample = self.test[idx]
-#
-#         if self.lstm_setting:
-#             lstm_beat = np.array([sample['cardiac_cycle'][i:i + 5] for i in range(0, 215, 5)])  # [43, 5]
-#         else:
-#             lstm_beat = sample['cardiac_cycle']
-#         tag = sample['aami_label_str']
-#         # sample = {'cardiac_cycle': lstm_beat, 'beat_type': tag, 'label': np.array(sample['label'])}
-#         if not self.one_vs_all:
-#             sample = {'cardiac_cycle': lstm_beat, 'beat_type': tag, 'label': np.array(sample['aami_label_one_hot'])}
-#         else:
-#             if tag == self.beat_type:
-#                 sample = {'cardiac_cycle': lstm_beat, 'beat_type': tag, 'label': np.array([1, 0])}
-#             else:
-#                 sample = {'cardiac_cycle': lstm_beat, 'beat_type': tag, 'label': np.array([0, 1])}
-#         if self.transform:
-#             sample = self.transform(sample)
-#         return sample
-#
-#     def len_beat(self, beat_Type):
-#         return len(np.array([sample for sample in self.test if sample['aami_label_str'] == beat_Type]))
-#
-#     def print_statistics(self):
-#         count = np.array([self.len_beat('N'), self.len_beat('S'), self.len_beat('V'),
-#                           self.len_beat('F'), self.len_beat('Q')])
-#         print("Beat N: #{}\t Beat S: #{}\t Beat V: #{}\n Beat F: #{}\t Beat Q: #{}".format(count[0], count[1], count[2],
-#                                                                                            count[3], count[4]))
-
-
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 
     def __call__(self, sample):
         heartbeat, label = sample['cardiac_cycle'], sample['label']
-        # if sample['cardiac_cycle_other_lead'] is not None:
-        #     other_lead_name = sample['other_lead_name']
-        #     heartbeat_other_lead = torch.from_numpy(sample['cardiac_cycle_other_lead']).double()
-        #     return {'cardiac_cycle': (torch.from_numpy(heartbeat)).double(),
-        #             'label': torch.from_numpy(label),
-        #             'beat_type': sample['beat_type'],
-        #             'cardiac_cycle_other_lead': heartbeat_other_lead,
-        #             'other_lead_name': other_lead_name}
-        # else:
+        physical_params = np.array([sample['p'], heartbeat[sample['p']],
+                                    sample['q'], heartbeat[sample['q']],
+                                    sample['r'], heartbeat[sample['r']],
+                                    sample['s'], heartbeat[sample['s']],
+                                    sample['t'], heartbeat[sample['t']]], dtype=np.float)
         return {'cardiac_cycle': (torch.from_numpy(heartbeat)).double(),
                 'label': torch.from_numpy(label),
                 'beat_type': sample['beat_type'],
+                'physical_params': torch.from_numpy(physical_params),
                 }
 
 

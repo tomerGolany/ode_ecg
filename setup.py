@@ -2,7 +2,7 @@
 from setuptools import find_packages
 from setuptools import setup
 
-REQUIRED_PACKAGES = ['torchdiffeq']
+REQUIRED_PACKAGES = ['torchdiffeq', 'wfdb', 'pandas', 'numpy', 'matplotlib', 'biosppy', 'torch']
 
 setup(name='ecg_ode',
       version='0.1',
