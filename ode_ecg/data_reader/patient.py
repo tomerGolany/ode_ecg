@@ -77,7 +77,7 @@ class Patient(object):
                       - sig_name: The signal name for each channel
                       - comments: Any comments written in the header
         """
-        signals, fields = wfdb.rdsamp(self.patient_number, pb_dir='mitdb', warn_empty=True)
+        signals, fields = wfdb.rdsamp(self.patient_number, pn_dir='mitdb', warn_empty=True)
         logging.info("Patient {} additional info: {}".format(self.patient_number, fields))
         return signals, fields
 
