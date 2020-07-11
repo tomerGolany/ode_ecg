@@ -4,7 +4,7 @@ from setuptools import setup
 
 REQUIRED_PACKAGES = ['torchdiffeq', 'wfdb', 'pandas', 'numpy', 'matplotlib', 'biosppy', 'torch']
 
-setup(name='ecg_ode_lib',
+setup(name='ode_ecg',
       version='0.1',
       install_requires=REQUIRED_PACKAGES,
       description='ECG ODE paper',
