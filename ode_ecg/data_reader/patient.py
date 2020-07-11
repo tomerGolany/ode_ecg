@@ -83,7 +83,7 @@ class Patient(object):
 
     def get_annotations(self):
         """Get signal annotation using the wfdb package."""
-        ann = wfdb.rdann(self.patient_number, 'atr', pb_dir='mitdb',
+        ann = wfdb.rdann(self.patient_number, 'atr', pn_dir='mitdb',
                          return_label_elements=['symbol', 'label_store', 'description'], summarize_labels=True)
         mit_bih_labels_str = ann.symbol
 
