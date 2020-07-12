@@ -34,9 +34,9 @@ def mit_bih_heartbeat_dataloader(heartbeat_type: str, batch_size: int) -> torch.
     return dataloader
 
 
-def generate_fake_heartbeats(generator_obj, initial_value, device: torch.device):
+def generate_fake_heartbeats(generator_obj, initial_value, device: torch.device, method):
     timestamps = torch.from_numpy(np.linspace(1, 216, num=216)).float().to(device)
-    fake_heartbeats = odeint(generator_obj, initial_value, timestamps, method='rk4')
+    fake_heartbeats = odeint(generator_obj, initial_value, timestamps, method=method)
     fake_heartbeats = fake_heartbeats.permute(1, 0, 2).view(-1, 216)
     return fake_heartbeats
 
@@ -95,7 +95,8 @@ def generator_training_step(generator_obj, discriminator_obj, fake_heartbeats, l
     }
 
 
-def train_physical_ode_gan(batch_size: int, num_iterations: int, model_dir: str, beat_type: str, device: torch.device):
+def train_physical_ode_gan(batch_size: int, num_iterations: int, model_dir: str, beat_type: str, device: torch.device,
+                           method: str):
     """Train a physical ODE-GAN.
 
     :param batch_size: Size of Batch.
@@ -103,6 +104,7 @@ def train_physical_ode_gan(batch_size: int, num_iterations: int, model_dir: str,
     :param model_dir: Model directory to write checkpoints and summaries.
     :param beat_type: Type of heartbeat to generate.
     :param device: GPU device to train on or cpu.
+    :param method: Integration method to solve to ODE.
     :return: None.
     """
 
@@ -155,7 +157,7 @@ def train_physical_ode_gan(batch_size: int, num_iterations: int, model_dir: str,
             v0 = ecg_batch[:, 0].view(-1, 1)  # For ODE solver initial step.
             num_of_beats_seen += ecg_batch.shape[0]
 
-            fake_heartbeats = generate_fake_heartbeats(generator_network, v0, device)
+            fake_heartbeats = generate_fake_heartbeats(generator_network, v0, device, method)
 
             discriminator_outputs = discriminator_training_step(discriminator_network, fake_heartbeats,
                                                                 ecg_batch, cross_entropy_loss, optimizer_d, device)
@@ -179,7 +181,7 @@ def train_physical_ode_gan(batch_size: int, num_iterations: int, model_dir: str,
                 logging.info(f"Loss G = {generator_outputs['total_loss']}")
 
                 with torch.no_grad():
-                    generator_output = generate_fake_heartbeats(generator_network, v0, device)
+                    generator_output = generate_fake_heartbeats(generator_network, v0, device, method)
                     plt.figure()
                     plt.title("Fake beats from Generator. iteration {}".format(i))
                     physical_params = physical_params.detach().cpu().numpy()
@@ -216,4 +218,4 @@ if __name__ == "__main__":
     logging.info("Using device: %s", main_device)
     train_physical_ode_gan(batch_size=40, num_iterations=100000,
                            model_dir='/Users/tomer.golany/Desktop/ecg_tweleve_lead_research/ode_gan/model_summaries/physical_ode_gan/6',
-                           beat_type='N', device=main_device)
+                           beat_type='N', device=main_device, method='euler')
